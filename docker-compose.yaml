@@ -10,21 +10,24 @@ x-common-service: &common-service
 services:
   playwright-service:
     build: apps/playwright-service
+    restart: unless-stopped
     environment:
-      - PORT=3000
+      - PORT=3002
       - PROXY_SERVER=${PROXY_SERVER}
       - PROXY_USERNAME=${PROXY_USERNAME}
       - PROXY_PASSWORD=${PROXY_PASSWORD}
       - BLOCK_MEDIA=${BLOCK_MEDIA}
     networks:
       - backend
+      - secret-lab
 
   api:
     <<: *common-service
+    restart: unless-stopped
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_RATE_LIMIT_URL: ${REDIS_URL:-redis://redis:6379}
-      PLAYWRIGHT_MICROSERVICE_URL: ${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000}
+      PLAYWRIGHT_MICROSERVICE_URL: ${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3002}
       USE_DB_AUTHENTICATION: ${USE_DB_AUTHENTICATION}
       PORT: ${PORT:-3002}
       NUM_WORKERS_PER_QUEUE: ${NUM_WORKERS_PER_QUEUE}
@@ -46,6 +49,8 @@ services:
       SELF_HOSTED_WEBHOOK_URL: ${SELF_HOSTED_WEBHOOK_URL}
       LOGGING_LEVEL: ${LOGGING_LEVEL}
       FLY_PROCESS_GROUP: app
+    networks:
+      - secret-lab
     depends_on:
       - redis
       - playwright-service
@@ -55,10 +60,11 @@ services:
 
   worker:
     <<: *common-service
+    restart: unless-stopped
     environment:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       REDIS_RATE_LIMIT_URL: ${REDIS_URL:-redis://redis:6379}
-      PLAYWRIGHT_MICROSERVICE_URL: ${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000}
+      PLAYWRIGHT_MICROSERVICE_URL: ${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3002}
       USE_DB_AUTHENTICATION: ${USE_DB_AUTHENTICATION}
       PORT: ${PORT:-3002}
       NUM_WORKERS_PER_QUEUE: ${NUM_WORKERS_PER_QUEUE}
@@ -80,6 +86,8 @@ services:
       SELF_HOSTED_WEBHOOK_URL: ${SELF_HOSTED_WEBHOOK_URL}
       LOGGING_LEVEL: ${LOGGING_LEVEL}
       FLY_PROCESS_GROUP: worker
+    networks:
+      - secret-lab
     depends_on:
       - redis
       - playwright-service
@@ -88,10 +96,12 @@ services:
 
   redis:
     image: redis:alpine
+    restart: unless-stopped
     networks:
-      - backend
+      - secret-lab
     command: redis-server --bind 0.0.0.0
 
 networks:
   backend:
-    driver: bridge
+  secret-lab:
+    external: true
