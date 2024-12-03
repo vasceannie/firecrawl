@@ -55,14 +55,18 @@ services:
       BLOCK_MEDIA: ${BLOCK_MEDIA}
     networks:
       - backend
+      - secret-lab
 
   api:
     <<: *common-service
+    restart: unless-stopped
     environment:
       <<: *common-env
       HOST: "0.0.0.0"
       PORT: ${INTERNAL_PORT:-3002}
       FLY_PROCESS_GROUP: app
+    networks:
+      - secret-lab
     depends_on:
       - redis
       - playwright-service
@@ -72,9 +76,12 @@ services:
 
   worker:
     <<: *common-service
+    restart: unless-stopped
     environment:
       <<: *common-env
       FLY_PROCESS_GROUP: worker
+    networks:
+      - secret-lab
     depends_on:
       - redis
       - playwright-service
@@ -89,9 +96,10 @@ services:
     # image: valkey/valkey:alpine
 
     networks:
-      - backend
+      - secret-lab
     command: redis-server --bind 0.0.0.0
 
 networks:
   backend:
-    driver: bridge
+  secret-lab:
+    external: true
