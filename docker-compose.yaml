@@ -6,6 +6,8 @@ x-common-service: &common-service
     - backend
   extra_hosts:
     - "host.docker.internal:host-gateway"
+  env_file:
+    - .env
 
 services:
   playwright-service:
