@@ -38,7 +38,7 @@ const useCache =
   process.env.CACHE_REDIS_URL !== undefined;
 
 export const engines: Engine[] = [
-  ...(useCache ? [ "cache" as const ] : []),
+  ...(useCache ? ["cache" as const] : []),
   ...(useFireEngine
     ? [
         "fire-engine;chrome-cdp" as const,
@@ -67,6 +67,7 @@ export const featureFlags = [
   "mobile",
   "skipTlsVerification",
   "useFastMode",
+  "stealthProxy",
 ] as const;
 
 export type FeatureFlag = (typeof featureFlags)[number];
@@ -87,6 +88,7 @@ export const featureFlagOptions: {
   location: { priority: 10 },
   mobile: { priority: 10 },
   skipTlsVerification: { priority: 10 },
+  stealthProxy: { priority: 20 },
 } as const;
 
 export type EngineScrapeResult = {
@@ -145,6 +147,7 @@ export const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: false,
+      stealthProxy: false,
     },
     quality: 1000, // cache should always be tried first
   },
@@ -161,6 +164,7 @@ export const engineOptions: {
       mobile: true,
       skipTlsVerification: true,
       useFastMode: false,
+      stealthProxy: true,
     },
     quality: 50,
   },
@@ -177,6 +181,7 @@ export const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: false,
+      stealthProxy: true,
     },
     quality: 40,
   },
@@ -193,6 +198,7 @@ export const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: false,
+      stealthProxy: false,
     },
     quality: 30,
   },
@@ -209,6 +215,7 @@ export const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: false,
+      stealthProxy: false,
     },
     quality: 29,
   },
@@ -225,6 +232,7 @@ export const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: false,
+      stealthProxy: false,
     },
     quality: 20,
   },
@@ -241,6 +249,7 @@ export const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: true,
+      stealthProxy: true,
     },
     quality: 10,
   },
@@ -257,6 +266,7 @@ export const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: true,
+      stealthProxy: false,
     },
     quality: 5,
   },
@@ -273,6 +283,7 @@ export const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: true,
+      stealthProxy: true, // kinda...
     },
     quality: -10,
   },
@@ -289,6 +300,7 @@ export const engineOptions: {
       mobile: false,
       skipTlsVerification: false,
       useFastMode: true,
+      stealthProxy: true, // kinda...
     },
     quality: -10,
   },
@@ -298,11 +310,17 @@ export function buildFallbackList(meta: Meta): {
   engine: Engine;
   unsupportedFeatures: Set<FeatureFlag>;
 }[] {
+  const _engines: Engine[] = [
+    ...engines,
+    
+    // enable fire-engine in self-hosted testing environment when mocks are supplied
+    ...((!useFireEngine && meta.mock !== null) ? ["fire-engine;chrome-cdp", "fire-engine;playwright", "fire-engine;tlsclient"] as Engine[] : [])
+  ];
 
   if (meta.internalOptions.useCache !== true) {
-    const cacheIndex = engines.indexOf("cache");
+    const cacheIndex = _engines.indexOf("cache");
     if (cacheIndex !== -1) {
-      engines.splice(cacheIndex, 1);
+      _engines.splice(cacheIndex, 1);
     }
   } else {
     meta.logger.debug("Cache engine enabled by useCache option");
@@ -320,8 +338,8 @@ export function buildFallbackList(meta: Meta): {
 
   const currentEngines =
     meta.internalOptions.forceEngine !== undefined
-      ? [meta.internalOptions.forceEngine]
-      : engines;
+      ? (Array.isArray(meta.internalOptions.forceEngine) ? meta.internalOptions.forceEngine : [meta.internalOptions.forceEngine])
+      : _engines;
 
   for (const engine of currentEngines) {
     const supportedFlags = new Set([
@@ -372,11 +390,13 @@ export function buildFallbackList(meta: Meta): {
     );
   }
 
-  selectedEngines.sort(
-    (a, b) =>
-      b.supportScore - a.supportScore ||
-      engineOptions[b.engine].quality - engineOptions[a.engine].quality,
-  );
+  if (meta.internalOptions.forceEngine === undefined) { // retain force engine order
+    selectedEngines.sort(
+      (a, b) =>
+        b.supportScore - a.supportScore ||
+        engineOptions[b.engine].quality - engineOptions[a.engine].quality,
+    );
+  }
 
   return selectedEngines;
 }

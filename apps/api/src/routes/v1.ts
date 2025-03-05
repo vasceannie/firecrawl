@@ -24,16 +24,16 @@ import { scrapeStatusController } from "../controllers/v1/scrape-status";
 import { concurrencyCheckController } from "../controllers/v1/concurrency-check";
 import { batchScrapeController } from "../controllers/v1/batch-scrape";
 import { extractController } from "../controllers/v1/extract";
-// import { crawlPreviewController } from "../../src/controllers/v1/crawlPreview";
-// import { crawlJobStatusPreviewController } from "../../src/controllers/v1/status";
-// import { searchController } from "../../src/controllers/v1/search";
-// import { crawlCancelController } from "../../src/controllers/v1/crawl-cancel";
-// import { keyAuthController } from "../../src/controllers/v1/keyAuth";
-// import { livenessController } from "../controllers/v1/liveness";
-// import { readinessController } from "../controllers/v1/readiness";
+import { extractStatusController } from "../controllers/v1/extract-status";
 import { creditUsageController } from "../controllers/v1/credit-usage";
 import { BLOCKLISTED_URL_MESSAGE } from "../lib/strings";
 import { searchController } from "../controllers/v1/search";
+import { crawlErrorsController } from "../controllers/v1/crawl-errors";
+import { generateLLMsTextController } from "../controllers/v1/generate-llmstxt";
+import { generateLLMsTextStatusController } from "../controllers/v1/generate-llmstxt-status";
+import { deepResearchController } from "../controllers/v1/deep-research";
+import { deepResearchStatusController } from "../controllers/v1/deep-research-status";
+import { tokenUsageController } from "../controllers/v1/token-usage";
 
 function checkCreditsMiddleware(
   minimum?: number,
@@ -53,14 +53,22 @@ function checkCreditsMiddleware(
         req.acuc = chunk;
       }
       if (!success) {
+        const currencyName = req.acuc.is_extract ? "tokens" : "credits"
         logger.error(
-          `Insufficient credits: ${JSON.stringify({ team_id: req.auth.team_id, minimum, remainingCredits })}`,
+          `Insufficient ${currencyName}: ${JSON.stringify({ team_id: req.auth.team_id, minimum, remainingCredits })}`,
+          {
+            teamId: req.auth.team_id,
+            minimum,
+            remainingCredits,
+            request: req.body,
+            path: req.path
+          }
         );
-        if (!res.headersSent) {
+        if (!res.headersSent && req.auth.team_id !== "8c528896-7882-4587-a4b6-768b721b0b53") {
           return res.status(402).json({
             success: false,
             error:
-              "Insufficient credits to perform this request. For more credits, you can upgrade your plan at https://firecrawl.dev/pricing or try changing the request limit to a lower value.",
+              "Insufficient " + currencyName + " to perform this request. For more " + currencyName + ", you can upgrade your plan at " + (currencyName === "credits" ? "https://firecrawl.dev/pricing or try changing the request limit to a lower value" : "https://www.firecrawl.dev/extract#pricing") + ".",
           });
         }
       }
@@ -163,7 +171,7 @@ v1Router.post(
 
 v1Router.post(
   "/batch/scrape",
-  authMiddleware(RateLimiterMode.Crawl),
+  authMiddleware(RateLimiterMode.Scrape),
   checkCreditsMiddleware(),
   blocklistMiddleware,
   idempotencyMiddleware,
@@ -198,7 +206,23 @@ v1Router.get(
   wrap((req: any, res): any => crawlStatusController(req, res, true)),
 );
 
-v1Router.get("/scrape/:jobId", wrap(scrapeStatusController));
+v1Router.get(
+  "/crawl/:jobId/errors",
+  authMiddleware(RateLimiterMode.CrawlStatus),
+  wrap(crawlErrorsController),
+);
+
+v1Router.get(
+  "/batch/scrape/:jobId/errors",
+  authMiddleware(RateLimiterMode.CrawlStatus),
+  wrap(crawlErrorsController),
+);
+
+v1Router.get(
+  "/scrape/:jobId",
+  authMiddleware(RateLimiterMode.CrawlStatus),
+  wrap(scrapeStatusController),
+);
 
 v1Router.get(
   "/concurrency-check",
@@ -210,9 +234,40 @@ v1Router.ws("/crawl/:jobId", crawlStatusWSController);
 
 v1Router.post(
   "/extract",
-  authMiddleware(RateLimiterMode.Scrape),
+  authMiddleware(RateLimiterMode.Extract),
   checkCreditsMiddleware(1),
   wrap(extractController),
+);
+
+v1Router.get(
+  "/extract/:jobId",
+  authMiddleware(RateLimiterMode.ExtractStatus),
+  wrap(extractStatusController),
+);
+
+v1Router.post(
+  "/llmstxt",
+  authMiddleware(RateLimiterMode.Extract),
+  wrap(generateLLMsTextController),
+);
+
+v1Router.get(
+  "/llmstxt/:jobId",
+  authMiddleware(RateLimiterMode.ExtractStatus),
+  wrap(generateLLMsTextStatusController),
+);
+
+v1Router.post(
+  "/deep-research",
+  authMiddleware(RateLimiterMode.Extract),
+  checkCreditsMiddleware(1),
+  wrap(deepResearchController),
+);
+
+v1Router.get(
+  "/deep-research/:jobId",
+  authMiddleware(RateLimiterMode.ExtractStatus),
+  wrap(deepResearchStatusController),
 );
 
 // v1Router.post("/crawlWebsitePreview", crawlPreviewController);
@@ -240,5 +295,8 @@ v1Router.get(
   wrap(creditUsageController),
 );
 
-
-
+v1Router.get(
+  "/team/token-usage",
+  authMiddleware(RateLimiterMode.ExtractStatus),
+  wrap(tokenUsageController),
+);

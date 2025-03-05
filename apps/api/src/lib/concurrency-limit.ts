@@ -1,16 +1,9 @@
-import { getRateLimiterPoints } from "../services/rate-limiter";
 import { redisConnection } from "../services/queue-service";
-import { RateLimiterMode } from "../types";
-import { JobsOptions } from "bullmq";
+import type { JobsOptions } from "bullmq";
 
 const constructKey = (team_id: string) => "concurrency-limiter:" + team_id;
 const constructQueueKey = (team_id: string) =>
   "concurrency-limit-queue:" + team_id;
-const stalledJobTimeoutMs = 2 * 60 * 1000;
-
-export function getConcurrencyLimitMax(plan: string): number {
-  return getRateLimiterPoints(RateLimiterMode.Scrape, undefined, plan);
-}
 
 export async function cleanOldConcurrencyLimitEntries(
   team_id: string,
@@ -33,11 +26,12 @@ export async function getConcurrencyLimitActiveJobs(
 export async function pushConcurrencyLimitActiveJob(
   team_id: string,
   id: string,
+  timeout: number,
   now: number = Date.now(),
 ) {
   await redisConnection.zadd(
     constructKey(team_id),
-    now + stalledJobTimeoutMs,
+    now + timeout,
     id,
   );
 }
@@ -76,4 +70,15 @@ export async function pushConcurrencyLimitedJob(
     job.priority ?? 1,
     JSON.stringify(job),
   );
+}
+
+export async function getConcurrencyLimitedJobs(
+  team_id: string,
+) {
+  return new Set((await redisConnection.zrange(constructQueueKey(team_id), 0, -1)).map(x => JSON.parse(x).id));
+}
+
+export async function getConcurrencyQueueJobsCount(team_id: string): Promise<number> {
+  const count = await redisConnection.zcard(constructQueueKey(team_id));
+  return count;
 }

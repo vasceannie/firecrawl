@@ -1,21 +1,16 @@
-import axios from "axios";
+import { embed } from "ai";
 import { configDotenv } from "dotenv";
-import OpenAI from "openai";
+import { getEmbeddingModel } from "./generic-ai";
 
 configDotenv();
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 async function getEmbedding(text: string) {
-  const embedding = await openai.embeddings.create({
-    model: "text-embedding-3-small",
-    input: text,
-    encoding_format: "float",
+  const { embedding } = await embed({
+    model: getEmbeddingModel("text-embedding-3-small"),
+    value: text,
   });
 
-  return embedding.data[0].embedding;
+  return embedding;
 }
 
 const cosineSimilarity = (vec1: number[], vec2: number[]): number => {
@@ -53,29 +48,26 @@ async function performRanking(
     // Generate embeddings for the search query
     const queryEmbedding = await getEmbedding(sanitizedQuery);
 
-    // Generate embeddings for each link and calculate similarity
+    // Generate embeddings for each link and calculate similarity in parallel
     const linksAndScores = await Promise.all(
-      linksWithContext.map(async (linkWithContext, index) => {
-        try {
-          const linkEmbedding = await getEmbedding(linkWithContext);
-          const score = cosineSimilarity(queryEmbedding, linkEmbedding);
-
-          return {
-            link: links[index],
-            linkWithContext,
-            score,
-            originalIndex: index,
-          };
-        } catch (err) {
-          // If embedding fails for a link, return with score 0
-          return {
+      linksWithContext.map((linkWithContext, index) =>
+        getEmbedding(linkWithContext)
+          .then((linkEmbedding) => {
+            const score = cosineSimilarity(queryEmbedding, linkEmbedding);
+            return {
+              link: links[index],
+              linkWithContext,
+              score,
+              originalIndex: index,
+            };
+          })
+          .catch(() => ({
             link: links[index],
             linkWithContext,
             score: 0,
             originalIndex: index,
-          };
-        }
-      }),
+          })),
+      ),
     );
 
     // Sort links based on similarity scores while preserving original order for equal scores

@@ -1,6 +1,30 @@
 import { RateLimiterRedis } from "rate-limiter-flexible";
-import { RateLimiterMode } from "../../src/types";
+import { PlanType, RateLimiterMode } from "../../src/types";
 import Redis from "ioredis";
+
+export const CONCURRENCY_LIMIT: Omit<Record<PlanType, number>, ""> = {
+  free: 2,
+  hobby: 4,
+  starter: 10,
+  standard: 10,
+  standardNew: 10,
+  standardnew: 10,
+  scale: 100,
+  growth: 100,
+  growthdouble: 100,
+  etier2c: 300,
+  etier1a: 200,
+  etier2a: 300,
+  etierscale1: 150,
+  etierscale2: 200,
+  testSuite: 200,
+  devB: 120,
+  etier2d: 250,
+  manual: 200,
+  extract_starter: 20,
+  extract_explorer: 100,
+  extract_pro: 200
+};
 
 const RATE_LIMITS = {
   crawl: {
@@ -19,6 +43,11 @@ const RATE_LIMITS = {
     etier1a: 1000,
     etier2a: 300,
     etierscale1: 150,
+    etierscale2: 300,
+    // extract ops
+    extract_starter: 20,
+    extract_explorer: 100,
+    extract_pro: 1000,
   },
   scrape: {
     default: 20,
@@ -36,6 +65,11 @@ const RATE_LIMITS = {
     etier1a: 1000,
     etier2a: 2500,
     etierscale1: 1500,
+    etierscale2: 2500,
+    // extract ops
+    extract_starter: 20,
+    extract_explorer: 100,
+    extract_pro: 1000,
   },
   search: {
     default: 20,
@@ -53,6 +87,11 @@ const RATE_LIMITS = {
     etier1a: 1000,
     etier2a: 2500,
     etierscale1: 1500,
+    etierscale2: 2500,
+    // extract ops
+    extract_starter: 20,
+    extract_explorer: 100,
+    extract_pro: 1000,
   },
   map: {
     default: 20,
@@ -64,12 +103,38 @@ const RATE_LIMITS = {
     hobby: 10,
     standardNew: 50,
     standardnew: 50,
-    growth: 500,
-    growthdouble: 500,
+    growth: 1000,
+    growthdouble: 1000,
     etier2c: 2500,
     etier1a: 1000,
     etier2a: 2500,
     etierscale1: 1500,
+    etierscale2: 2500,
+    // extract ops
+    extract_starter: 20,
+    extract_explorer: 100,
+    extract_pro: 1000,
+  },
+  extract: {
+    default: 20,
+    free: 10,
+    starter: 100,
+    standard: 100,
+    standardOld: 100,
+    scale: 300,
+    hobby: 20,
+    standardNew: 100,
+    standardnew: 100,
+    growth: 300,
+    growthdouble: 300,
+    etier2c: 1000,
+    etier1a: 1000,
+    etier2a: 1000,
+    etierscale1: 1000,
+    etierscale2: 1000,
+    extract_starter: 20,
+    extract_explorer: 100,
+    extract_pro: 1000,
   },
   preview: {
     free: 5,
@@ -80,6 +145,10 @@ const RATE_LIMITS = {
     default: 100,
   },
   crawlStatus: {
+    free: 500,
+    default: 5000,
+  },
+  extractStatus: {
     free: 500,
     default: 5000,
   },
@@ -163,10 +232,12 @@ const testSuiteTokens = [
   "6c46abb",
   "cb0ff78",
   "fd769b2",
-  "4c2638d",
+  // "4c2638d",
   "cbb3462", // don't remove (s-ai)
   "824abcd", // don't remove (s-ai)
   "0966288",
+  "226556f",
+  "0a18c9e", // gh
 ];
 
 const manual = ["69be9e74-7624-4990-b20d-08e0acc70cf6"];
@@ -187,6 +258,7 @@ export function getRateLimiterPoints(
 
   const points: number =
     rateLimitConfig[makePlanKey(plan)] || rateLimitConfig.default; // 5
+
   return points;
 }
 
@@ -224,4 +296,39 @@ export function getRateLimiter(
     `${mode}-${makePlanKey(plan)}`,
     getRateLimiterPoints(mode, token, plan, teamId),
   );
+}
+
+export function getConcurrencyLimitMax(
+  plan: PlanType,
+  teamId?: string,
+): number {
+  // Moved this to auth check, plan will come as testSuite if token is present
+  // if (token && testSuiteTokens.some((testToken) => token.includes(testToken))) {
+  //   return CONCURRENCY_LIMIT.testSuite;
+  // }
+  if (teamId && teamId === process.env.DEV_B_TEAM_ID) {
+    return CONCURRENCY_LIMIT.devB;
+  }
+
+  if (teamId && teamId === process.env.ETIER1A_TEAM_ID) {
+    return CONCURRENCY_LIMIT.etier1a;
+  }
+
+  if (teamId && teamId === process.env.ETIER2A_TEAM_ID) {
+    return CONCURRENCY_LIMIT.etier2a;
+  }
+
+  if (teamId && teamId === process.env.ETIER2D_TEAM_ID) {
+    return CONCURRENCY_LIMIT.etier2a;
+  }
+
+  if (teamId && manual.includes(teamId)) {
+    return CONCURRENCY_LIMIT.manual;
+  }
+
+  return CONCURRENCY_LIMIT[plan] ?? 10;
+}
+
+export function isTestSuiteToken(token: string): boolean {
+  return testSuiteTokens.some((testToken) => token.includes(testToken));
 }

@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { Action } from "../../../../lib/entities";
 import { robustFetch } from "../../lib/fetch";
+import { MockState } from "../../lib/mock";
 
 export type FireEngineScrapeRequestCommon = {
   url: string;
@@ -26,6 +27,8 @@ export type FireEngineScrapeRequestCommon = {
   instantReturn?: boolean; // default: false
   geolocation?: { country?: string; languages?: string[] };
 
+  mobileProxy?: boolean; // leave it undefined if user doesn't specify
+
   timeout?: number;
 };
 
@@ -36,6 +39,7 @@ export type FireEngineScrapeRequestChromeCDP = {
   blockMedia?: true; // cannot be false
   mobile?: boolean;
   disableSmartWaitCache?: boolean;
+  blockAds?: boolean; // default: true
 };
 
 export type FireEngineScrapeRequestPlaywright = {
@@ -61,6 +65,8 @@ const schema = z.object({
   processing: z.boolean(),
 });
 
+export const fireEngineURL = process.env.FIRE_ENGINE_BETA_URL ?? "<mock-fire-engine-url>";
+
 export async function fireEngineScrape<
   Engine extends
     | FireEngineScrapeRequestChromeCDP
@@ -69,11 +75,9 @@ export async function fireEngineScrape<
 >(
   logger: Logger,
   request: FireEngineScrapeRequestCommon & Engine,
+  mock: MockState | null,
+  abort?: AbortSignal,
 ): Promise<z.infer<typeof schema>> {
-  const fireEngineURL = process.env.FIRE_ENGINE_BETA_URL!;
-
-  // TODO: retries
-
   const scrapeRequest = await Sentry.startSpan(
     {
       name: "fire-engine: Scrape",
@@ -97,6 +101,8 @@ export async function fireEngineScrape<
         logger: logger.child({ method: "fireEngineScrape/robustFetch" }),
         schema,
         tryCount: 3,
+        mock,
+        abort,
       });
     },
   );

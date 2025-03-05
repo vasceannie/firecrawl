@@ -10,8 +10,10 @@ import { issueCredits } from "./issue_credits";
 import { redlock } from "../redlock";
 import { autoCharge } from "./auto_charge";
 import { getValue, setValue } from "../redis";
+import { queueBillingOperation } from "./batch_billing";
 import type { Logger } from "winston";
 
+// Deprecated, done via rpc
 const FREE_CREDITS = 500;
 
 /**
@@ -22,60 +24,45 @@ export async function billTeam(
   subscription_id: string | null | undefined,
   credits: number,
   logger?: Logger,
+  is_extract: boolean = false,
 ) {
-  return withAuth(supaBillTeam, { success: true, message: "No DB, bypassed." })(
-    team_id,
-    subscription_id,
-    credits,
-    logger,
-  );
+  // Maintain the withAuth wrapper for authentication
+  return withAuth(
+    async (team_id, subscription_id, credits, logger, is_extract) => {
+      // Within the authenticated context, queue the billing operation
+      return queueBillingOperation(team_id, subscription_id, credits, is_extract);
+    }, 
+    { success: true, message: "No DB, bypassed." }
+  )(team_id, subscription_id, credits, logger, is_extract);
 }
+
 export async function supaBillTeam(
   team_id: string,
   subscription_id: string | null | undefined,
   credits: number,
   __logger?: Logger,
+  is_extract: boolean = false,
 ) {
+  // This function should no longer be called directly
+  // It has been moved to batch_billing.ts
   const _logger = (__logger ?? logger).child({
     module: "credit_billing",
     method: "supaBillTeam",
-  });
-
-  if (team_id === "preview") {
-    return { success: true, message: "Preview team, no credits used" };
-  }
-  _logger.info(`Billing team ${team_id} for ${credits} credits`, {
-    team_id,
+    teamId: team_id,
+    subscriptionId: subscription_id,
     credits,
   });
 
-  const { data, error } = await supabase_service.rpc("bill_team", {
-    _team_id: team_id,
-    sub_id: subscription_id ?? null,
-    fetch_subscription: subscription_id === undefined,
-    credits,
+  _logger.warn("supaBillTeam was called directly. This function is deprecated and should only be called from batch_billing.ts");
+  queueBillingOperation(team_id, subscription_id, credits, is_extract).catch((err) => {
+    _logger.error("Error queuing billing operation", { err });
+    Sentry.captureException(err);
   });
-
-  if (error) {
-    Sentry.captureException(error);
-    _logger.error("Failed to bill team.", { error });
-    return;
-  }
-
-  (async () => {
-    for (const apiKey of (data ?? []).map((x) => x.api_key)) {
-      await setCachedACUC(apiKey, (acuc) =>
-        acuc
-          ? {
-              ...acuc,
-              credits_used: acuc.credits_used + credits,
-              adjusted_credits_used: acuc.adjusted_credits_used + credits,
-              remaining_credits: acuc.remaining_credits - credits,
-            }
-          : null,
-      );
-    }
-  })();
+  // Forward to the batch billing system
+  return {
+    success: true,
+    message: "Billing operation queued",
+  };
 }
 
 export type CheckTeamCreditsResponse = {
@@ -104,7 +91,7 @@ export async function supaCheckTeamCredits(
   credits: number,
 ): Promise<CheckTeamCreditsResponse> {
   // WARNING: chunk will be null if team_id is preview -- do not perform operations on it under ANY circumstances - mogery
-  if (team_id === "preview") {
+  if (team_id === "preview" || team_id.startsWith("preview_")) {
     return {
       success: true,
       message: "Preview team, no credits used",
@@ -145,7 +132,8 @@ export async function supaCheckTeamCredits(
 
   if (
     isAutoRechargeEnabled &&
-    chunk.remaining_credits < autoRechargeThreshold
+    chunk.remaining_credits < autoRechargeThreshold &&
+    !chunk.is_extract
   ) {
     const autoChargeResult = await autoCharge(chunk, autoRechargeThreshold);
     if (autoChargeResult.success) {
