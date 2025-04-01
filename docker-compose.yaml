@@ -4,12 +4,12 @@ x-common-service: &common-service
   # NOTE: If you want to build the service locally,
   # uncomment the build: statement and comment out the image: statement
   image: registry.lab/firecrawl-api:latest
-  build: apps/api
+  # build: apps/api
 
-  ulimits:
-    nofile:
-      soft: 65535
-      hard: 65535
+  # ulimits:
+  #   nofile:
+  #     soft: 65535
+  #     hard: 65535
   networks:
     - backend
   extra_hosts:
