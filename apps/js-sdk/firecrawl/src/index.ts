@@ -104,6 +104,7 @@ export type Action = {
 } | {
   type: "click",
   selector: string,
+  all?: boolean,
 } | {
   type: "screenshot",
   fullPage?: boolean,
@@ -140,6 +141,14 @@ export interface ScrapeParams<LLMSchema extends zt.ZodSchema = any, ActionsSchem
 
 export interface ActionsResult {
   screenshots: string[];
+  scrapes: ({
+    url: string;
+    html: string;
+  })[];
+  javascriptReturns: {
+    type: string;
+    value: unknown
+  }[];
 }
 
 /**
@@ -160,6 +169,7 @@ export interface CrawlParams {
   includePaths?: string[];
   excludePaths?: string[];
   maxDepth?: number;
+  maxDiscoveryDepth?: number;
   limit?: number;
   allowBackwardLinks?: boolean;
   allowExternalLinks?: boolean;
@@ -354,7 +364,7 @@ export interface CrawlErrorsResponse {
  * Parameters for deep research operations.
  * Defines options for conducting deep research on a query.
  */
-export interface DeepResearchParams {
+export interface DeepResearchParams<LLMSchema extends zt.ZodSchema = any>  {
   /**
    * Maximum depth of research iterations (1-10)
    * @default 7
@@ -371,9 +381,29 @@ export interface DeepResearchParams {
    */
   maxUrls?: number;
   /**
+   * The prompt to use for the final analysis
+   */
+  analysisPrompt?: string;
+  /**
+   * The system prompt to use for the research agent
+   */
+  systemPrompt?: string;
+  /**
+   * The formats to use for the final analysis
+   */
+  formats?: ("markdown" | "json")[];
+  /**
+   * The JSON options to use for the final analysis
+   */
+  jsonOptions?:{
+    prompt?: string;
+    schema?: LLMSchema;
+    systemPrompt?: string;
+  };
+  /** 
    * Experimental flag for streaming steps
    */
-  __experimental_streamSteps?: boolean;
+  // __experimental_streamSteps?: boolean;
 }
 
 /**
@@ -1118,27 +1148,26 @@ export default class FirecrawlApp {
   /**
    * Extracts information from URLs using the Firecrawl API.
    * Currently in Beta. Expect breaking changes on future minor versions.
-   * @param url - The URL to extract information from.
+   * @param urls - The URLs to extract information from. Optional if using other methods for data extraction.
    * @param params - Additional parameters for the extract request.
    * @returns The response from the extract operation.
    */
-  async extract<T extends zt.ZodSchema = any>(urls: string[], params?: ExtractParams<T>): Promise<ExtractResponse<zt.infer<T>> | ErrorResponse> {
+  async extract<T extends zt.ZodSchema = any>(urls?: string[], params?: ExtractParams<T>): Promise<ExtractResponse<zt.infer<T>> | ErrorResponse> {
     const headers = this.prepareHeaders();
 
-    let jsonData: { urls: string[] } & ExtractParams<T> = { urls,  ...params };
+    let jsonData: { urls?: string[] } & ExtractParams<T> = { urls: urls,  ...params };
     let jsonSchema: any;
     try {
       if (!params?.schema) {
         jsonSchema = undefined;
-      } else if (params.schema instanceof zt.ZodType) {
-        jsonSchema = zodToJsonSchema(params.schema);
+      } else if (typeof params.schema === "object" && params.schema !== null && Object.getPrototypeOf(params.schema)?.constructor?.name?.startsWith("Zod")) {
+        jsonSchema = zodToJsonSchema(params.schema as zt.ZodType);
       } else {
         jsonSchema = params.schema;
       }
     } catch (error: any) {
       throw new FirecrawlError("Invalid schema. Schema must be either a valid Zod schema or JSON schema object.", 400);
     }
-
     
     try {
       const response: AxiosResponse = await this.postRequest(
@@ -1332,12 +1361,14 @@ export default class FirecrawlApp {
     checkInterval: number
   ): Promise<CrawlStatusResponse | ErrorResponse> {
     try {
+      let failedTries = 0;
       while (true) {
         let statusResponse: AxiosResponse = await this.getRequest(
           `${this.apiUrl}/v1/crawl/${id}`,
           headers
         );
         if (statusResponse.status === 200) {
+          failedTries = 0;
           let statusData = statusResponse.data;
             if (statusData.status === "completed") {
               if ("data" in statusData) {
@@ -1369,7 +1400,10 @@ export default class FirecrawlApp {
             );
           }
         } else {
-          this.handleError(statusResponse, "check crawl status");
+          failedTries++;
+          if (failedTries >= 3) {
+            this.handleError(statusResponse, "check crawl status");
+          }
         }
       }
     } catch (error: any) {
@@ -1383,7 +1417,7 @@ export default class FirecrawlApp {
    * @param {string} action - The action being performed when the error occurred.
    */
   handleError(response: AxiosResponse, action: string): void {
-    if ([400, 402, 408, 409, 500].includes(response.status)) {
+    if ([400, 402, 403, 408, 409, 500].includes(response.status)) {
       const errorMessage: string =
         response.data.error || "Unknown error occurred";
       const details = response.data.details ? ` - ${JSON.stringify(response.data.details)}` : '';
@@ -1410,7 +1444,7 @@ export default class FirecrawlApp {
    */
   async deepResearch(
     query: string, 
-    params: DeepResearchParams,
+    params: DeepResearchParams<zt.ZodSchema>,
     onActivity?: (activity: {
       type: string;
       status: string;
@@ -1495,12 +1529,31 @@ export default class FirecrawlApp {
    * @param params - Parameters for the deep research operation.
    * @returns The response containing the research job ID.
    */
-  async asyncDeepResearch(query: string, params: DeepResearchParams): Promise<DeepResearchResponse | ErrorResponse> {
+  async asyncDeepResearch(query: string, params: DeepResearchParams<zt.ZodSchema>): Promise<DeepResearchResponse | ErrorResponse> {
     const headers = this.prepareHeaders();
+    let jsonData: any = { query, ...params };
+
+    if (jsonData?.jsonOptions?.schema) {
+      let schema = jsonData.jsonOptions.schema;
+      // Try parsing the schema as a Zod schema
+      try {
+        schema = zodToJsonSchema(schema);
+      } catch (error) {
+        
+      }
+      jsonData = {
+        ...jsonData,
+        jsonOptions: {
+          ...jsonData.jsonOptions,
+          schema: schema,
+        },
+      };
+    }
+
     try {
       const response: AxiosResponse = await this.postRequest(
         `${this.apiUrl}/v1/deep-research`,
-        { query, ...params },
+        jsonData,
         headers
       );
 

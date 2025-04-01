@@ -48,6 +48,8 @@ class DeepResearchParams(pydantic.BaseModel):
     maxDepth: Optional[int] = 7
     timeLimit: Optional[int] = 270
     maxUrls: Optional[int] = 20
+    analysisPrompt: Optional[str] = None
+    systemPrompt: Optional[str] = None
     __experimental_streamSteps: Optional[bool] = None
 
 class DeepResearchResponse(pydantic.BaseModel):
@@ -646,12 +648,12 @@ class FirecrawlApp:
         else:
             self._handle_error(response, "check batch scrape errors")
 
-    def extract(self, urls: List[str], params: Optional[ExtractParams] = None) -> Any:
+    def extract(self, urls: Optional[List[str]] = None, params: Optional[ExtractParams] = None) -> Any:
         """
         Extracts information from a URL using the Firecrawl API.
 
         Args:
-            urls (List[str]): The URLs to extract information from.
+            urls (Optional[List[str]]): The URLs to extract information from.
             params (Optional[ExtractParams]): Additional parameters for the extract request.
 
         Returns:
@@ -661,6 +663,9 @@ class FirecrawlApp:
 
         if not params or (not params.get('prompt') and not params.get('schema')):
             raise ValueError("Either prompt or schema is required")
+
+        if not urls and not params.get('prompt'):
+            raise ValueError("Either urls or prompt is required")
 
         schema = params.get('schema')
         if schema:
@@ -678,6 +683,8 @@ class FirecrawlApp:
             'origin': 'api-sdk'
         }
 
+        if not request_data['urls']:
+            request_data['urls'] = []
         # Only add prompt and systemPrompt if they exist
         if params.get('prompt'):
             request_data['prompt'] = params['prompt']
@@ -1093,6 +1100,8 @@ class FirecrawlApp:
 
         if response.status_code == 402:
             message = f"Payment Required: Failed to {action}. {error_message} - {error_details}"
+        elif response.status_code == 403:
+            message = f"Website Not Supported: Failed to {action}. {error_message} - {error_details}"
         elif response.status_code == 408:
             message = f"Request Timeout: Failed to {action} as the request timed out. {error_message} - {error_details}"
         elif response.status_code == 409:
@@ -1163,7 +1172,6 @@ class FirecrawlApp:
             time.sleep(2)  # Polling interval
 
         return {'success': False, 'error': 'Deep research job terminated unexpectedly'}
-
     def async_deep_research(self, query: str, params: Optional[Union[Dict[str, Any], DeepResearchParams]] = None) -> Dict[str, Any]:
         """
         Initiates an asynchronous deep research operation.
@@ -1187,7 +1195,14 @@ class FirecrawlApp:
             research_params = params
 
         headers = self._prepare_headers()
+        
         json_data = {'query': query, **research_params.dict(exclude_none=True)}
+
+        # Handle json options schema if present
+        if 'jsonOptions' in json_data:
+            json_opts = json_data['jsonOptions']
+            if json_opts and 'schema' in json_opts and hasattr(json_opts['schema'], 'schema'):
+                json_data['jsonOptions']['schema'] = json_opts['schema'].schema()
 
         try:
             response = self._post_request(f'{self.api_url}/v1/deep-research', json_data, headers)
