@@ -53,9 +53,6 @@ services:
       PROXY_USERNAME: ${PROXY_USERNAME}
       PROXY_PASSWORD: ${PROXY_PASSWORD}
       BLOCK_MEDIA: ${BLOCK_MEDIA}
-    networks:
-      - backend
-      - secret-lab
 
   api:
     <<: *common-service
@@ -65,8 +62,6 @@ services:
       HOST: "0.0.0.0"
       PORT: ${INTERNAL_PORT:-3002}
       FLY_PROCESS_GROUP: app
-    networks:
-      - secret-lab
     depends_on:
       - redis
       - playwright-service
@@ -80,8 +75,6 @@ services:
     environment:
       <<: *common-env
       FLY_PROCESS_GROUP: worker
-    networks:
-      - secret-lab
     depends_on:
       - redis
       - playwright-service
@@ -94,12 +87,7 @@ services:
     # Using Valkey with Firecrawl is untested and not guaranteed to work. Use with caution.
     image: redis:alpine
     # image: valkey/valkey:alpine
-
-    networks:
-      - secret-lab
     command: redis-server --bind 0.0.0.0
 
 networks:
   backend:
-  secret-lab:
-    external: true
