@@ -95,6 +95,8 @@ services:
     image: redis:alpine
     restart: unless-stopped
     # image: valkey/valkey:alpine
+    networks:
+      - backend
     command: redis-server --bind 0.0.0.0
     networks:
       - backend
