@@ -80,6 +80,8 @@ services:
     environment:
       <<: *common-env
       FLY_PROCESS_GROUP: worker
+      MAX_CPU: "0.99"
+      MAX_RAM: "0.99"
     networks:
       - backend
     depends_on:
@@ -87,7 +89,7 @@ services:
       - playwright-service
       - api
     command: [ "pnpm", "run", "workers" ]
-    mem_limit: 12g
+    mem_limit: 8g
     cpus: 4
 
   redis:
