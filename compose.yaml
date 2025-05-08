@@ -98,8 +98,6 @@ services:
     networks:
       - backend
     command: redis-server --bind 0.0.0.0
-    networks:
-      - backend
 
 networks:
   backend:
