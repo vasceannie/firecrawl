@@ -87,7 +87,7 @@ services:
       - playwright-service
       - api
     command: [ "pnpm", "run", "workers" ]
-    mem_limit: 8g
+    mem_limit: 12g
     cpus: 4
 
   redis:
