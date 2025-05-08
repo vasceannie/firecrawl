@@ -87,6 +87,8 @@ services:
       - playwright-service
       - api
     command: [ "pnpm", "run", "workers" ]
+    mem_limit: 8g
+    cpus: 4
 
   redis:
     # NOTE: If you want to use Valkey (open source) instead of Redis (source available),
