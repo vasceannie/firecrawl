@@ -90,19 +90,20 @@ function checkCreditsMiddleware(
 }
 
 export function authMiddleware(
-  rateLimiterMode: RateLimiterMode,
+  rateLimiterMode: RateLimiterMode
 ): (req: RequestWithMaybeAuth, res: Response, next: NextFunction) => void {
   return (req, res, next) => {
     (async () => {
-      if (rateLimiterMode === RateLimiterMode.Extract && isAgentExtractModelValid((req.body as any)?.agent?.model)) {
-        rateLimiterMode = RateLimiterMode.ExtractAgentPreview;
+      let currentRateLimiterMode = rateLimiterMode;
+      if (currentRateLimiterMode === RateLimiterMode.Extract && isAgentExtractModelValid((req.body as any)?.agent?.model)) {
+        currentRateLimiterMode = RateLimiterMode.ExtractAgentPreview;
       }
 
-      // if (rateLimiterMode === RateLimiterMode.Scrape && isAgentExtractModelValid((req.body as any)?.agent?.model)) {
-      //   rateLimiterMode = RateLimiterMode.ScrapeAgentPreview;
+      // if (currentRateLimiterMode === RateLimiterMode.Scrape && isAgentExtractModelValid((req.body as any)?.agent?.model)) {
+      //   currentRateLimiterMode = RateLimiterMode.ScrapeAgentPreview;
       // }
 
-      const auth = await authenticateUser(req, res, rateLimiterMode);
+      const auth = await authenticateUser(req, res, currentRateLimiterMode);
 
       if (!auth.success) {
         if (!res.headersSent) {
@@ -147,8 +148,8 @@ function idempotencyMiddleware(
   })().catch((err) => next(err));
 }
 
-function blocklistMiddleware(req: Request, res: Response, next: NextFunction) {
-  if (typeof req.body.url === "string" && isUrlBlocked(req.body.url)) {
+function blocklistMiddleware(req: RequestWithACUC<any, any, any>, res: Response, next: NextFunction) {
+  if (typeof req.body.url === "string" && isUrlBlocked(req.body.url, req.acuc?.flags ?? null)) {
     if (!res.headersSent) {
       return res.status(403).json({
         success: false,
@@ -267,6 +268,7 @@ v1Router.get(
 v1Router.post(
   "/llmstxt",
   authMiddleware(RateLimiterMode.Scrape),
+  blocklistMiddleware,
   wrap(generateLLMsTextController),
 );
 

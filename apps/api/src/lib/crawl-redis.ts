@@ -1,5 +1,5 @@
 import { InternalOptions } from "../scraper/scrapeURL";
-import { ScrapeOptions } from "../controllers/v1/types";
+import { ScrapeOptions, TeamFlags } from "../controllers/v1/types";
 import { WebCrawler } from "../scraper/WebScraper/crawler";
 import { redisConnection } from "../services/queue-service";
 import { logger as _logger } from "./logger";
@@ -163,15 +163,15 @@ export async function finishCrawlPre(id: string) {
     await redisConnection.expire("crawl:" + id + ":finished_pre", 24 * 60 * 60);
     return set === 1;
   } else {
-    _logger.debug("Crawl can not be pre-finished yet, not marking as finished.", {
-      module: "crawl-redis",
-      method: "finishCrawlPre",
-      crawlId: id,
-      jobs_done: await redisConnection.scard("crawl:" + id + ":jobs_done"),
-      jobs: await redisConnection.scard("crawl:" + id + ":jobs"),
-      kickoff_finished:
-        (await redisConnection.get("crawl:" + id + ":kickoff:finish")) !== null,
-    });
+    // _logger.debug("Crawl can not be pre-finished yet, not marking as finished.", {
+    //   module: "crawl-redis",
+    //   method: "finishCrawlPre",
+    //   crawlId: id,
+    //   jobs_done: await redisConnection.scard("crawl:" + id + ":jobs_done"),
+    //   jobs: await redisConnection.scard("crawl:" + id + ":jobs"),
+    //   kickoff_finished:
+    //     (await redisConnection.get("crawl:" + id + ":kickoff:finish")) !== null,
+    // });
   }
 }
 
@@ -279,9 +279,9 @@ export async function lockURL(
       (await redisConnection.scard("crawl:" + id + ":visited_unique")) >=
       sc.crawlerOptions.limit
     ) {
-      logger.debug(
-        "Crawl has already hit visited_unique limit, not locking URL.",
-      );
+      // logger.debug(
+      //   "Crawl has already hit visited_unique limit, not locking URL.",
+      // );
       return false;
     }
   }
@@ -383,6 +383,7 @@ export async function lockURLsIndividually(
 export function crawlToCrawler(
   id: string,
   sc: StoredCrawl,
+  teamFlags: TeamFlags,
   newBase?: string,
   crawlerOptions?: any,
 ): WebCrawler {
@@ -403,7 +404,7 @@ export function crawlToCrawler(
     allowExternalContentLinks:
       sc.crawlerOptions?.allowExternalContentLinks ?? false,
     allowSubdomains: sc.crawlerOptions?.allowSubdomains ?? false,
-    ignoreRobotsTxt: sc.crawlerOptions?.ignoreRobotsTxt ?? false,
+    ignoreRobotsTxt: teamFlags?.ignoreRobots ?? sc.crawlerOptions?.ignoreRobotsTxt ?? false,
     regexOnFullURL: sc.crawlerOptions?.regexOnFullURL ?? false,
     maxDiscoveryDepth: sc.crawlerOptions?.maxDiscoveryDepth,
     currentDiscoveryDepth: crawlerOptions?.currentDiscoveryDepth ?? 0,

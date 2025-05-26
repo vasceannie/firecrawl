@@ -11,6 +11,9 @@ import { saveExtract } from "../../lib/extract/extract-redis";
 import { getTeamIdSyncB } from "../../lib/extract/team-id-sync";
 import { performExtraction } from "../../lib/extract/extraction-service";
 import { performExtraction_F0 } from "../../lib/extract/fire-0/extraction-service-f0";
+import { BLOCKLISTED_URL_MESSAGE } from "../../lib/strings";
+import { isUrlBlocked } from "../../scraper/WebScraper/utils/blocklist";
+import { logger as _logger } from "../../lib/logger";
 
 export async function oldExtract(
   req: RequestWithAuth<{}, ExtractResponse, ExtractRequest>,
@@ -56,9 +59,31 @@ export async function extractController(
   res: Response<ExtractResponse>,
 ) {
   const selfHosted = process.env.USE_DB_AUTHENTICATION !== "true";
+  const originalRequest = { ...req.body };
   req.body = extractRequestSchema.parse(req.body);
 
+  const invalidURLs: string[] = req.body.urls?.filter((url: string) => isUrlBlocked(url, req.acuc?.flags ?? null)) ?? [];
+
+  if (invalidURLs.length > 0 && !req.body.ignoreInvalidURLs) {
+    if (!res.headersSent) {
+      return res.status(403).json({
+        success: false,
+        error: BLOCKLISTED_URL_MESSAGE,
+      });
+    }
+  }
+
   const extractId = crypto.randomUUID();
+
+  _logger.info("Extract starting...", {
+    request: req.body,
+    originalRequest,
+    teamId: req.auth.team_id,
+    team_id: req.auth.team_id,
+    subId: req.acuc?.sub_id,
+    extractId,
+  });
+
   const jobData = {
     request: req.body,
     teamId: req.auth.team_id,
@@ -121,5 +146,8 @@ export async function extractController(
     success: true,
     id: extractId,
     urlTrace: [],
+    ...(invalidURLs.length > 0 && req.body.ignoreInvalidURLs ? {
+      invalidURLs,
+    } : {}),
   });
 }

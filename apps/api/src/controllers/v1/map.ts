@@ -5,6 +5,7 @@ import {
   mapRequestSchema,
   RequestWithAuth,
   scrapeOptions,
+  TeamFlags,
   TimeoutSignal,
 } from "./types";
 import { crawlToCrawler, StoredCrawl } from "../../lib/crawl-redis";
@@ -56,6 +57,7 @@ export async function getMapResults({
   abort = new AbortController().signal, // noop
   mock,
   filterByPath = true,
+  flags,
 }: {
   url: string;
   search?: string;
@@ -70,6 +72,7 @@ export async function getMapResults({
   abort?: AbortSignal;
   mock?: string;
   filterByPath?: boolean;
+  flags: TeamFlags;
 }): Promise<MapResult> {
   const id = uuidv4();
   let links: string[] = [url];
@@ -88,7 +91,7 @@ export async function getMapResults({
     createdAt: Date.now(),
   };
 
-  const crawler = crawlToCrawler(id, sc);
+  const crawler = crawlToCrawler(id, sc, flags);
 
   try {
     sc.robots = await crawler.getRobotsTxt(false, abort);
@@ -304,7 +307,14 @@ export async function mapController(
   req: RequestWithAuth<{}, MapResponse, MapRequest>,
   res: Response<MapResponse>,
 ) {
+  const originalRequest = req.body;
   req.body = mapRequestSchema.parse(req.body);
+
+  logger.info("Map request", {
+    request: req.body,
+    originalRequest,
+    teamId: req.auth.team_id,
+  });
 
   let result: Awaited<ReturnType<typeof getMapResults>>;
   const abort = new AbortController();
@@ -322,6 +332,7 @@ export async function mapController(
         abort: abort.signal,
         mock: req.body.useMock,
         filterByPath: req.body.filterByPath !== false,
+        flags: req.acuc?.flags ?? null,
       }),
       ...(req.body.timeout !== undefined ? [
         new Promise((resolve, reject) => setTimeout(() => {
