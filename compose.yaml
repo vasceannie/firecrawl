@@ -70,8 +70,8 @@ services:
     depends_on:
       - redis
       - playwright-service
-    ports:
-      - "${PORT:-3009}:${INTERNAL_PORT:-3002}"
+    expose:
+      - "${PORT:-3002}"
     command: [ "pnpm", "run", "start:production" ]
 
   worker:
