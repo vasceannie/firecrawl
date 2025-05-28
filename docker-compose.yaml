@@ -55,7 +55,6 @@ services:
       BLOCK_MEDIA: ${BLOCK_MEDIA}
     networks:
       - backend
-      - secret-lab
 
   api:
     <<: *common-service
@@ -65,13 +64,14 @@ services:
       HOST: "0.0.0.0"
       PORT: ${INTERNAL_PORT:-3002}
       FLY_PROCESS_GROUP: app
-    networks:
-      - secret-lab
     depends_on:
       - redis
       - playwright-service
-    ports:
-      - "${PORT:-3002}:${INTERNAL_PORT:-3002}"
+    # ports:
+    #   - "${PORT:-3002}:${INTERNAL_PORT:-3002}"
+    expose:
+      - "${INTERNAL_PORT:-3002}"
+
     command: [ "pnpm", "run", "start:production" ]
 
   worker:
@@ -80,8 +80,6 @@ services:
     environment:
       <<: *common-env
       FLY_PROCESS_GROUP: worker
-    networks:
-      - secret-lab
     depends_on:
       - redis
       - playwright-service
@@ -94,12 +92,7 @@ services:
     # Using Valkey with Firecrawl is untested and not guaranteed to work. Use with caution.
     image: redis:alpine
     # image: valkey/valkey:alpine
-
-    networks:
-      - secret-lab
     command: redis-server --bind 0.0.0.0
 
 networks:
   backend:
-  secret-lab:
-    external: true
