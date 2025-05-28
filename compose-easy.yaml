@@ -98,10 +98,10 @@ services:
     # Using Valkey with Firecrawl is untested and not guaranteed to work. Use with caution.
     image: redis:alpine
     restart: unless-stopped
+    command: redis-server --bind 0.0.0.0 --requirepass ""
     # image: valkey/valkey:alpine
     networks:
       - backend
-    command: redis-server --bind 0.0.0.0
 
 networks:
   backend:
