@@ -56,6 +56,12 @@ services:
       PROXY_USERNAME: ${PROXY_USERNAME}
       PROXY_PASSWORD: ${PROXY_PASSWORD}
       BLOCK_MEDIA: ${BLOCK_MEDIA}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   api:
     <<: *common-service
@@ -73,6 +79,12 @@ services:
     expose:
       - "${PORT:-3002}"
     command: [ "pnpm", "run", "start:production" ]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${INTERNAL_PORT:-3002}/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
   worker:
     <<: *common-service
@@ -91,6 +103,12 @@ services:
     command: [ "pnpm", "run", "workers" ]
     mem_limit: 8g
     cpus: 4
+    healthcheck:
+      test: ["CMD", "pnpm", "run", "healthcheck" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   redis:
     # NOTE: If you want to use Valkey (open source) instead of Redis (source available),
@@ -102,6 +120,12 @@ services:
     # image: valkey/valkey:alpine
     networks:
       - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 networks:
   backend:

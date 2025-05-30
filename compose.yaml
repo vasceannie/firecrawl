@@ -69,8 +69,9 @@ services:
       - backend
     depends_on:
       - playwright-service
-    expose:
-      - "${PORT:-3002}"
+      - redis
+    ports:
+      - "${PORT:-3002}:${INTERNAL_PORT:-3002}"
     command: [ "pnpm", "run", "start:production" ]
 
   worker:
@@ -84,22 +85,23 @@ services:
     networks:
       - backend
     depends_on:
+      - redis
       - playwright-service
       - api
     command: [ "pnpm", "run", "workers" ]
     mem_limit: 8g
     cpus: 4
 
-  # redis:
+  redis:
   #   # NOTE: If you want to use Valkey (open source) instead of Redis (source available),
   #   # uncomment the Valkey statement and comment out the Redis statement.
   #   # Using Valkey with Firecrawl is untested and not guaranteed to work. Use with caution.
   #   # image: redis:alpine
-  #   restart: unless-stopped
-  #   image: valkey/valkey:alpine
-  #   networks:
-  #     - backend
-  #   command: redis-server --bind 0.0.0.0
+    restart: unless-stopped
+    image: valkey/valkey:alpine
+    networks:
+      - backend
+    command: redis-server --bind 0.0.0.0
 
 networks:
   backend:
