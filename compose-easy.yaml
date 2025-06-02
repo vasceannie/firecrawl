@@ -76,8 +76,10 @@ services:
     depends_on:
       - redis
       - playwright-service
-    expose:
-      - "${PORT:-3002}"
+    # expose:
+    #   - "${PORT:-3002}"
+    ports:
+      - "${PORT:-3009}:3002"
     command: [ "pnpm", "run", "start:production" ]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3002/v0/health/liveness"]
