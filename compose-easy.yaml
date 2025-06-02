@@ -57,7 +57,7 @@ services:
       PROXY_PASSWORD: ${PROXY_PASSWORD}
       BLOCK_MEDIA: ${BLOCK_MEDIA}
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health" ]
+      test: ["CMD", "pgrep", "node"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -80,7 +80,7 @@ services:
       - "${PORT:-3002}"
     command: [ "pnpm", "run", "start:production" ]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:${INTERNAL_PORT:-3002}/health" ]
+      test: ["CMD", "curl", "-f", "http://localhost:3002/v0/health/liveness"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -104,9 +104,9 @@ services:
     mem_limit: 8g
     cpus: 4
     healthcheck:
-      test: ["CMD", "pnpm", "run", "healthcheck" ]
+      test: ["CMD", "pgrep", "node"]
       interval: 30s
-      timeout: 10s
+      timeout: 5s
       retries: 3
       start_period: 10s
 
