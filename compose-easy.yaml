@@ -112,22 +112,22 @@ services:
       retries: 3
       start_period: 10s
 
-  redis:
-    # NOTE: If you want to use Valkey (open source) instead of Redis (source available),
-    # uncomment the Valkey statement and comment out the Redis statement.
-    # Using Valkey with Firecrawl is untested and not guaranteed to work. Use with caution.
-    image: redis:alpine
-    restart: unless-stopped
-    command: redis-server --bind 0.0.0.0 --requirepass ""
-    # image: valkey/valkey:alpine
-    networks:
-      - backend
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+  # redis:
+  #   # NOTE: If you want to use Valkey (open source) instead of Redis (source available),
+  #   # uncomment the Valkey statement and comment out the Redis statement.
+  #   # Using Valkey with Firecrawl is untested and not guaranteed to work. Use with caution.
+  #   image: redis:alpine
+  #   restart: unless-stopped
+  #   command: redis-server --bind 0.0.0.0 --requirepass ""
+  #   # image: valkey/valkey:alpine
+  #   networks:
+  #     - backend
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 30s
+  #     timeout: 5s
+  #     retries: 3
+  #     start_period: 10s
 
 networks:
   backend:
