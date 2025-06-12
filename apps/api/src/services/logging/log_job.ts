@@ -2,7 +2,7 @@ import { supabase_service } from "../supabase";
 import { FirecrawlJob } from "../../types";
 import { posthog } from "../posthog";
 import "dotenv/config";
-import { logger } from "../../lib/logger";
+import { logger as _logger } from "../../lib/logger";
 import { configDotenv } from "dotenv";
 import { saveJobToGCS } from "../../lib/gcs-jobs";
 configDotenv();
@@ -21,54 +21,27 @@ function cleanOfNull<T>(x: T): T {
   }
 }
 
-async function indexJob(job: FirecrawlJob): Promise<void> {
-  try {
-    if (job.mode !== "single_urls" && job.mode !== "scrape") {
-      return;
-    }
+export async function logJob(job: FirecrawlJob, force: boolean = false, bypassLogging: boolean = false) {
+  const logger = _logger.child({
+    module: "log_job",
+    method: "logJob",
+    ...(job.mode === "scrape" || job.mode === "single_urls" || job.mode === "single_url" ? ({
+      scrapeId: job.job_id,
+    }) : {}),
+    ...(job.mode === "crawl" || job.mode === "batch_scrape" ? ({
+      crawlId: job.job_id,
+    }) : {}),
+    ...(job.mode === "extract" ? ({
+      extractId: job.job_id,
+    }) : {}),
+  });
 
-    const response = await fetch(`${process.env.FIRE_INDEX_SERVER_URL}/api/jobs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        url: job.url,
-        mode: job.mode || "scrape",
-        docs: job.docs,
-        origin: job.origin,
-        success: job.success,
-        time_taken: job.time_taken,
-        num_tokens: job.num_tokens,
-        page_options: job.scrapeOptions,
-        date_added: new Date().toISOString(),
-      }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      // logger.error(`Failed to send job to external server: ${response.status} ${response.statusText}`, {
-      //   error: errorData,
-      //   scrapeId: job.job_id,
-      // });
-    } else {
-      // logger.debug("Job sent to external server successfully!", { scrapeId: job.job_id });
-    }
-  } catch (error) {
-    // logger.error(`Error sending job to external server: ${error.message}`, {
-    //   error,
-    //   scrapeId: job.job_id,
-    // });
-  }
-}
-
-export async function logJob(job: FirecrawlJob, force: boolean = false) {
   try {
     const useDbAuthentication = process.env.USE_DB_AUTHENTICATION === "true";
     if (!useDbAuthentication) {
       return;
     }
-
+    
     // Redact any pages that have an authorization header
     // actually, Don't. we use the db to retrieve results now. this breaks authed crawls - mogery
     // if (
@@ -97,6 +70,7 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
       crawler_options: job.crawlerOptions,
       page_options: job.scrapeOptions,
       origin: job.origin,
+      integration: job.integration ?? null,
       num_tokens: job.num_tokens,
       retry: !!job.retry,
       crawl_id: job.crawl_id,
@@ -104,15 +78,16 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
       is_migrated: true,
       cost_tracking: job.cost_tracking,
       pdf_num_pages: job.pdf_num_pages ?? null,
+      credits_billed: job.credits_billed ?? null,
+      change_tracking_tag: job.change_tracking_tag ?? null,
     };
-
-    // Send job to external server
-    if (process.env.FIRE_INDEX_SERVER_URL) {
-      indexJob(job);
-    }
 
     if (process.env.GCS_BUCKET_NAME) {
       await saveJobToGCS(job);
+    }
+
+    if (bypassLogging) {
+      return;
     }
 
     if (force) {
@@ -126,7 +101,7 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
           if (error) {
             logger.error(
               "Failed to log job due to Supabase error -- trying again",
-              { error, scrapeId: job.job_id },
+              { error },
             );
             await new Promise<void>((resolve) =>
               setTimeout(() => resolve(), 75),
@@ -138,27 +113,26 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
         } catch (error) {
           logger.error(
             "Failed to log job due to thrown error -- trying again",
-            { error, scrapeId: job.job_id },
+            { error },
           );
           await new Promise<void>((resolve) => setTimeout(() => resolve(), 75));
         }
       }
       if (done) {
-        logger.debug("Job logged successfully!", { scrapeId: job.job_id });
+        logger.debug("Job logged successfully!");
       } else {
-        logger.error("Failed to log job!", { scrapeId: job.job_id });
+        logger.error("Failed to log job!");
       }
     } else {
       const { error } = await supabase_service
         .from("firecrawl_jobs")
         .insert([jobColumn]);
       if (error) {
-        logger.error(`Error logging job: ${error.message}`, {
+        logger.error(`Error logging job`, {
           error,
-          scrapeId: job.job_id,
         });
       } else {
-        logger.debug("Job logged successfully!", { scrapeId: job.job_id });
+        logger.debug("Job logged successfully!");
       }
     }
 
@@ -185,6 +159,7 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
           tokens_billed: job.tokens_billed,
           cost_tracking: job.cost_tracking,
           pdf_num_pages: job.pdf_num_pages,
+          change_tracking_tag: job.change_tracking_tag ?? null,
         },
       };
       if (job.mode !== "single_urls") {
@@ -192,6 +167,8 @@ export async function logJob(job: FirecrawlJob, force: boolean = false) {
       }
     }
   } catch (error) {
-    logger.error(`Error logging job: ${error.message}`);
+    logger.error(`Error logging job`, {
+      error,
+    });
   }
 }

@@ -1,5 +1,5 @@
 import { Response } from "express";
-import { logger } from "../../lib/logger";
+import { logger as _logger } from "../../lib/logger";
 import {
   Document,
   RequestWithAuth,
@@ -21,17 +21,22 @@ export async function scrapeController(
 ) {
   const jobId = uuidv4();
   const preNormalizedBody = { ...req.body };
+  const logger = _logger.child({
+    method: "scrapeController",
+    jobId,
+    scrapeId: jobId,
+    teamId: req.auth.team_id,
+    team_id: req.auth.team_id,
+  });
  
   logger.debug("Scrape " + jobId + " starting", {
     scrapeId: jobId,
     request: req.body,
     originalRequest: preNormalizedBody,
-    teamId: req.auth.team_id,
     account: req.account,
   });
 
   req.body = scrapeRequestSchema.parse(req.body);
-  let earlyReturn = false;
 
   const origin = req.body.origin;
   const timeout = req.body.timeout;
@@ -41,8 +46,9 @@ export async function scrapeController(
     team_id: req.auth.team_id,
     basePriority: 10,
   });
-  // 
 
+  const isDirectToBullMQ = process.env.SEARCH_PREVIEW_TOKEN !== undefined && process.env.SEARCH_PREVIEW_TOKEN === req.body.__searchPreviewToken;
+  
   await addScrapeJob(
     {
       url: req.body.url,
@@ -53,13 +59,17 @@ export async function scrapeController(
         teamId: req.auth.team_id,
         saveScrapeResultToGCS: process.env.GCS_FIRE_ENGINE_BUCKET_NAME ? true : false,
         unnormalizedSourceURL: preNormalizedBody.url,
+        useCache: req.body.__experimental_cache ? true : false,
+        bypassBilling: isDirectToBullMQ,
       },
-      origin: req.body.origin,
-      is_scrape: true,
+      origin,
+      integration: req.body.integration,
+      startTime,
     },
     {},
     jobId,
     jobPriority,
+    isDirectToBullMQ,
   );
 
   const totalWait =
@@ -73,9 +83,7 @@ export async function scrapeController(
   try {
     doc = await waitForJob(jobId, timeout + totalWait);
   } catch (e) {
-    logger.error(`Error in scrapeController: ${e}`, {
-      jobId,
-      scrapeId: jobId,
+    logger.error(`Error in scrapeController`, {
       startTime,
     });
     
@@ -86,9 +94,7 @@ export async function scrapeController(
         // @Nick this is a hack pushed at 2AM pls help - mogery
         const job = await supabaseGetJobById(jobId);
         if (!job?.cost_tracking) {
-          logger.warn("No cost tracking found for job", {
-            jobId,
-          });
+          logger.warn("No cost tracking found for job");
         }
         creditsToBeBilled = Math.ceil((job?.cost_tracking?.totalCost ?? 1) * 1800);
       } else {
@@ -124,31 +130,7 @@ export async function scrapeController(
   }
 
   await getScrapeQueue().remove(jobId);
-
-  const endTime = new Date().getTime();
-  const timeTakenInSeconds = (endTime - startTime) / 1000;
-  const numTokens =
-    doc && doc.extract
-      ? // ? numTokensFromString(doc.markdown, "gpt-3.5-turbo")
-        0 // TODO: fix
-      : 0;
-
-  if (earlyReturn) {
-    // Don't bill if we're early returning
-    return;
-  }
-
-  let creditsToBeBilled = await calculateCreditsToBeBilled(req.body, doc, jobId);
-
-  billTeam(req.auth.team_id, req.acuc?.sub_id, creditsToBeBilled).catch(
-    (error) => {
-      logger.error(
-        `Failed to bill team ${req.auth.team_id} for ${creditsToBeBilled} credits: ${error}`,
-      );
-      // Optionally, you could notify an admin or add to a retry queue here
-    },
-  );
-
+  
   if (!req.body.formats.includes("rawHtml")) {
     if (doc && doc.rawHtml) {
       delete doc.rawHtml;
