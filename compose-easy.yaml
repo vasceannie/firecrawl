@@ -16,8 +16,8 @@ x-common-service: &common-service
     - "host.docker.internal:host-gateway"
 
 x-common-env: &common-env
-  REDIS_URL: ${REDIS_URL:-redis://default:pass@xcsc4g0s0080ss0ok0kk8kkc:6379/0}
-  REDIS_RATE_LIMIT_URL: ${REDIS_URL:-redis://default:pass@xcsc4g0s0080ss0ok0kk8kkc:6379/0}
+  REDIS_URL: ${REDIS_URL:-redis://default:pass@192.168.50.210:56379/0}
+  REDIS_RATE_LIMIT_URL: ${REDIS_URL:-redis://default:pass@192.168.50.210:56379/0}
   PLAYWRIGHT_MICROSERVICE_URL: ${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000/scrape}
   USE_DB_AUTHENTICATION: ${USE_DB_AUTHENTICATION}
   OPENAI_API_KEY: ${OPENAI_API_KEY}
