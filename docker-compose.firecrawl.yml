@@ -3,8 +3,8 @@ name: firecrawl
 x-common-service: &common-service
   # NOTE: If you don't want to build the service locally,
   # uncomment the build: statement and comment out the image: statement
-  image: ghcr.io/firecrawl/firecrawl
-  # build: apps/api
+  # image: ghcr.io/firecrawl/firecrawl
+  build: .
 
   ulimits:
     nofile:
@@ -86,7 +86,7 @@ services:
 
     networks:
       - backend
-    command: redis-server --bind 0.0.0.0
+    command: redis-server --bind 0.0.0.0 --protected-mode no
   
   nuq-postgres:
     build: apps/nuq-postgres
