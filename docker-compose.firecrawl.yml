@@ -50,6 +50,7 @@ services:
     # NOTE: If you don't want to build the service locally,
     # uncomment the build: statement and comment out the image: statement
     image: ghcr.io/firecrawl/playwright-service:latest
+    container_name: playwright-service
     # build: apps/playwright-service-ts
     environment:
       PORT: 3000
@@ -68,6 +69,7 @@ services:
       PORT: ${INTERNAL_PORT:-3002}
       WORKER_PORT: ${WORKER_PORT:-3005}
       ENV: local
+    container_name: api
     depends_on:
       - redis
       - playwright-service
@@ -83,7 +85,7 @@ services:
     # Using Valkey with Firecrawl is untested and not guaranteed to work. Use with caution.
     # image: redis:alpine
     image: valkey/valkey:alpine
-
+    container_name: redis
     networks:
       - backend
     command: redis-server --bind 0.0.0.0
