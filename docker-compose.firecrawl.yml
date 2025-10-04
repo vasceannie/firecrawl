@@ -71,7 +71,7 @@ services:
       ENV: local
     container_name: api
     depends_on:
-      - redis
+      # - redis
       - playwright-service
     networks:
       - backend
@@ -79,16 +79,16 @@ services:
       - "${INTERNAL_PORT:-3002}"
     command: node dist/src/harness.js --start-docker
 
-  redis:
-    # NOTE: If you want to use Valkey (open source) instead of Redis (source available),
-    # uncomment the Valkey statement and comment out the Redis statement.
-    # Using Valkey with Firecrawl is untested and not guaranteed to work. Use with caution.
-    # image: redis:alpine
-    image: valkey/valkey:alpine
-    container_name: redis
-    networks:
-      - backend
-    command: redis-server --bind 0.0.0.0
+  # redis:
+  #   # NOTE: If you want to use Valkey (open source) instead of Redis (source available),
+  #   # uncomment the Valkey statement and comment out the Redis statement.
+  #   # Using Valkey with Firecrawl is untested and not guaranteed to work. Use with caution.
+  #   # image: redis:alpine
+  #   image: valkey/valkey:alpine
+  #   container_name: redis
+  #   networks:
+  #     - backend
+  #   command: redis-server --bind 0.0.0.0
   
   nuq-postgres:
     build: apps/nuq-postgres
