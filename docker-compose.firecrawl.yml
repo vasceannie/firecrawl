@@ -23,7 +23,7 @@ x-common-env: &common-env
   USE_DB_AUTHENTICATION: ${USE_DB_AUTHENTICATION}
   OPENAI_API_KEY: sk-uH-OGDpTXD17I16bgbf6sw
   OPENAI_BASE_URL: http://llm.lab
-  MODEL_NAME: fireworks/deepseek-v3p1-terminus
+  MODEL_NAME: or/grok-4-fast
   MODEL_EMBEDDING_NAME: text-embedding-3-small
   OLLAMA_BASE_URL: ${OLLAMA_BASE_URL} 
   SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
