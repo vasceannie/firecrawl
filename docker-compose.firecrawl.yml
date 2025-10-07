@@ -38,8 +38,8 @@ x-common-env: &common-env
   SERPER_API_KEY: ${SERPER_API_KEY}
   SEARCHAPI_API_KEY: ${SEARCHAPI_API_KEY}
   LOGGING_LEVEL: ${LOGGING_LEVEL}
-  PROXY_SERVER: pr.oxylabs.io:7777
-  PROXY_USERNAME: vasceannie_Rn3sD
+  PROXY_SERVER: pr.oxylabs.io:10000
+  PROXY_USERNAME: customer-vasceannie_Rn3sD
   PROXY_PASSWORD: Squirtle123
   SEARXNG_ENDPOINT: http://search.lab
   SEARXNG_ENGINES: ${SEARXNG_ENGINES}
