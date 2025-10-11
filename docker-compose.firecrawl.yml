@@ -14,6 +14,8 @@ x-common-service: &common-service
     - backend
   extra_hosts:
     - "host.docker.internal:host-gateway"
+    - "search.lab:host-gateway"
+    - "llm.lab:host-gateway"
 
 x-common-env: &common-env
   REDIS_URL: ${REDIS_URL:-redis://redis:6379}
@@ -60,6 +62,14 @@ services:
       BLOCK_MEDIA: ${BLOCK_MEDIA}
     networks:
       - backend
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
 
   api:
     <<: *common-service
@@ -78,6 +88,14 @@ services:
     expose:
       - "${INTERNAL_PORT:-3002}"
     command: node dist/src/harness.js --start-docker
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 8G
+        reservations:
+          cpus: '2'
+          memory: 4G
 
   # redis:
   #   # NOTE: If you want to use Valkey (open source) instead of Redis (source available),
