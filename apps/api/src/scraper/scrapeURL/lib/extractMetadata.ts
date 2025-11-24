@@ -1,23 +1,33 @@
 import { load } from "cheerio"; // rustified
 import { Document } from "../../../controllers/v1/types";
 import { Meta } from "..";
-import { extractMetadata as _extractMetadata } from "../../../lib/html-transformer";
+import { extractMetadata as _extractMetadata } from "@mendable/firecrawl-rs";
 
-export async function extractMetadataRust(
+async function extractMetadataRust(
   meta: Meta,
   html: string,
 ): Promise<Partial<Document["metadata"]>> {
-  const fromRust = await _extractMetadata(html);
+  const { favicon: _favicon, ...fromRust } = await _extractMetadata(html);
+
+  let favicon: string | undefined = undefined;
+
+  if (_favicon) {
+    try {
+      favicon = new URL(_favicon, meta.rewrittenUrl ?? meta.url).href;
+    } catch (error) {
+      meta.logger.debug("Failed to resolve favicon URL", {
+        favicon: _favicon,
+        error,
+      });
+    }
+  }
 
   return {
     ...fromRust,
-    ...(fromRust.favicon ? {
-      favicon: new URL(fromRust.favicon, meta.url)
-    } : {}),
+    favicon,
     scrapeId: meta.id,
   };
 }
-
 
 export async function extractMetadata(
   meta: Meta,
@@ -26,10 +36,14 @@ export async function extractMetadata(
   try {
     return await extractMetadataRust(meta, html);
   } catch (error) {
-    meta.logger.warn("Failed to call html-transformer! Falling back to cheerio...", {
-      error,
-      module: "scrapeURL", method: "extractMetadata"
-    });
+    meta.logger.warn(
+      "Failed to call html-transformer! Falling back to cheerio...",
+      {
+        error,
+        module: "scrapeURL",
+        method: "extractMetadata",
+      },
+    );
   }
 
   let title: string | undefined = undefined;
@@ -75,7 +89,7 @@ export async function extractMetadata(
       soup('link[rel*="icon"]').first().attr("href") ||
       undefined;
     if (faviconLink) {
-      const baseUrl = new URL(meta.url).origin;
+      const baseUrl = new URL(meta.rewrittenUrl ?? meta.url).origin;
       favicon = faviconLink.startsWith("http")
         ? faviconLink
         : `${baseUrl}${faviconLink}`;
@@ -133,16 +147,32 @@ export async function extractMetadata(
       // Extract all meta tags for custom metadata
       soup("meta").each((i, elem) => {
         try {
-          const name = soup(elem).attr("name") || soup(elem).attr("property");
+          const name =
+            soup(elem).attr("name") ||
+            soup(elem).attr("property") ||
+            soup(elem).attr("itemprop");
           const content = soup(elem).attr("content");
 
           if (name && content) {
-            if (customMetadata[name] === undefined) {
-              customMetadata[name] = content;
-            } else if (Array.isArray(customMetadata[name])) {
-              (customMetadata[name] as string[]).push(content);
+            if (name === "description") {
+              if (customMetadata[name] === undefined) {
+                customMetadata[name] = content;
+              } else {
+                customMetadata[name] = Array.isArray(customMetadata[name])
+                  ? [...(customMetadata[name] as string[]), content].join(", ")
+                  : `${customMetadata[name]}, ${content}`;
+              }
             } else {
-              customMetadata[name] = [customMetadata[name] as string, content];
+              if (customMetadata[name] === undefined) {
+                customMetadata[name] = content;
+              } else if (Array.isArray(customMetadata[name])) {
+                (customMetadata[name] as string[]).push(content);
+              } else {
+                customMetadata[name] = [
+                  customMetadata[name] as string,
+                  content,
+                ];
+              }
             }
           }
         } catch (error) {

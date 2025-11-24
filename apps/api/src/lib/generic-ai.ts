@@ -1,4 +1,4 @@
-import { openai } from "@ai-sdk/openai";
+import { createOpenAI } from "@ai-sdk/openai";
 import { createOllama } from "ollama-ai-provider";
 import { anthropic } from "@ai-sdk/anthropic";
 import { groq } from "@ai-sdk/groq";
@@ -23,7 +23,10 @@ const defaultProvider: Provider = process.env.OLLAMA_BASE_URL
   : "openai";
 
 const providerList: Record<Provider, any> = {
-  openai, //OPENAI_API_KEY
+  openai: createOpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_BASE_URL,
+  }), //OPENAI_API_KEY
   ollama: createOllama({
     baseURL: process.env.OLLAMA_BASE_URL,
   }),
@@ -37,16 +40,24 @@ const providerList: Record<Provider, any> = {
   deepinfra, //DEEPINFRA_API_KEY
   vertex: createVertex({
     project: "firecrawl",
-    location: "us-central1",
-    googleAuthOptions: process.env.VERTEX_CREDENTIALS ? {
-      credentials: JSON.parse(atob(process.env.VERTEX_CREDENTIALS)),
-    } : {
-      keyFile: "./gke-key.json",
-    },
+    //https://github.com/vercel/ai/issues/6644 bug
+    baseURL:
+      "https://aiplatform.googleapis.com/v1/projects/firecrawl/locations/global/publishers/google",
+    location: "global",
+    googleAuthOptions: process.env.VERTEX_CREDENTIALS
+      ? {
+          credentials: JSON.parse(atob(process.env.VERTEX_CREDENTIALS)),
+        }
+      : {
+          keyFile: "./gke-key.json",
+        },
   }),
 };
 
 export function getModel(name: string, provider: Provider = defaultProvider) {
+  if (name === "gemini-2.5-pro") {
+    name = "gemini-2.5-pro";
+  }
   return process.env.MODEL_NAME
     ? providerList[provider](process.env.MODEL_NAME)
     : providerList[provider](name);

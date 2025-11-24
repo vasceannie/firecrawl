@@ -1,18 +1,15 @@
-import { redisConnection } from "../../services/queue-service";
+import { redisEvictConnection } from "../../services/redis";
 import { logger as _logger } from "../logger";
 
-export enum DeepResearchStep {
-  INITIAL = "initial",
-  SEARCH = "search",
-  EXTRACT = "extract",
-  ANALYZE = "analyze",
-  SYNTHESIS = "synthesis",
-  COMPLETE = "complete"
-}
-
 export type DeepResearchActivity = {
-  type: 'search' | 'extract' | 'analyze' | 'reasoning' | 'synthesis' | 'thought';
-  status: 'processing' | 'complete' | 'error';
+  type:
+    | "search"
+    | "extract"
+    | "analyze"
+    | "reasoning"
+    | "synthesis"
+    | "thought";
+  status: "processing" | "complete" | "error";
   message: string;
   timestamp: string;
   depth: number;
@@ -50,14 +47,22 @@ export type StoredDeepResearch = {
 // TTL of 6 hours
 const DEEP_RESEARCH_TTL = 6 * 60 * 60;
 
-export async function saveDeepResearch(id: string, research: StoredDeepResearch) {
+export async function saveDeepResearch(
+  id: string,
+  research: StoredDeepResearch,
+) {
   _logger.debug("Saving deep research " + id + " to Redis...");
-  await redisConnection.set("deep-research:" + id, JSON.stringify(research));
-  await redisConnection.expire("deep-research:" + id, DEEP_RESEARCH_TTL);
+  await redisEvictConnection.set(
+    "deep-research:" + id,
+    JSON.stringify(research),
+  );
+  await redisEvictConnection.expire("deep-research:" + id, DEEP_RESEARCH_TTL);
 }
 
-export async function getDeepResearch(id: string): Promise<StoredDeepResearch | null> {
-  const x = await redisConnection.get("deep-research:" + id);
+export async function getDeepResearch(
+  id: string,
+): Promise<StoredDeepResearch | null> {
+  const x = await redisEvictConnection.get("deep-research:" + id);
   return x ? JSON.parse(x) : null;
 }
 
@@ -72,10 +77,10 @@ export async function updateDeepResearch(
     ...current,
     ...research,
     // Append new activities if provided
-    activities: research.activities 
+    activities: research.activities
       ? [...(current.activities || []), ...research.activities]
       : current.activities,
-    // Append new findings if provided  
+    // Append new findings if provided
     // findings: research.findings
     //   ? [...(current.findings || []), ...research.findings]
     //   : current.findings,
@@ -86,19 +91,20 @@ export async function updateDeepResearch(
     // Append new summaries if provided
     summaries: research.summaries
       ? [...(current.summaries || []), ...research.summaries]
-      : current.summaries
+      : current.summaries,
   };
 
-  
-
-  await redisConnection.set("deep-research:" + id, JSON.stringify(updatedResearch));
-  await redisConnection.expire("deep-research:" + id, DEEP_RESEARCH_TTL);
+  await redisEvictConnection.set(
+    "deep-research:" + id,
+    JSON.stringify(updatedResearch),
+  );
+  await redisEvictConnection.expire("deep-research:" + id, DEEP_RESEARCH_TTL);
 }
 
 export async function getDeepResearchExpiry(id: string): Promise<Date> {
   const d = new Date();
-  const ttl = await redisConnection.pttl("deep-research:" + id);
+  const ttl = await redisEvictConnection.pttl("deep-research:" + id);
   d.setMilliseconds(d.getMilliseconds() + ttl);
   d.setMilliseconds(0);
   return d;
-} 
+}
