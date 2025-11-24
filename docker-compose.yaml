@@ -19,6 +19,7 @@ x-common-env: &common-env
   REDIS_URL: ${REDIS_URL:-redis://redis:6379}
   REDIS_RATE_LIMIT_URL: ${REDIS_URL:-redis://redis:6379}
   PLAYWRIGHT_MICROSERVICE_URL: ${PLAYWRIGHT_MICROSERVICE_URL:-http://playwright-service:3000/scrape}
+  NUQ_DATABASE_URL: postgres://postgres:postgres@nuq-postgres:5432/postgres
   USE_DB_AUTHENTICATION: ${USE_DB_AUTHENTICATION}
   OPENAI_API_KEY: ${OPENAI_API_KEY}
   OPENAI_BASE_URL: ${OPENAI_BASE_URL}
@@ -66,6 +67,7 @@ services:
       PORT: ${INTERNAL_PORT:-3002}
       FLY_PROCESS_GROUP: app
     networks:
+      - backend
       - secret-lab
     depends_on:
       - redis
@@ -98,6 +100,17 @@ services:
     networks:
       - secret-lab
     command: redis-server --bind 0.0.0.0
+
+  nuq-postgres:
+    build: apps/nuq-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    networks:
+      - backend
+    ports:
+      - "5432:5432"
 
 networks:
   backend:
